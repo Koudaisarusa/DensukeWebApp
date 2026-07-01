@@ -1,9 +1,10 @@
 import streamlit as st
 import datetime
 
-def generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, time_slots, excluded_dates):
+def generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, time_slots, excluded_dates, format_type):
     """
-    指定した期間，曜日，時間帯，および除外日の条件に合わせて，伝助用の日付リストを生成する関数．
+    指定した期間，曜日，時間帯，除外日，および出力フォーマットの条件に合わせて，
+    スケジュール調整ツール用の日付リストを生成する関数．
 
     Parameters:
         start_date (datetime.date): 開始日
@@ -11,6 +12,7 @@ def generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, tim
         selected_weekdays (list of int): 出力対象とする曜日のインデックスリスト（0:月 〜 6:日）
         time_slots (list of str): 各日付に追加する時間帯文字列のリスト．空の場合は時間帯なし．
         excluded_dates (list of datetime.date): 候補から除外する特定の日付のリスト．
+        format_type (str): 日付の出力フォーマット（例: "M/D(曜日)"）
         
     Returns:
         list: 条件に合わせて生成されたスケジュール文字列のリスト
@@ -22,7 +24,17 @@ def generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, tim
     while current_date <= end_date:
         # 除外日に指定されておらず，かつ選択された曜日に含まれているかチェック
         if current_date not in excluded_dates and current_date.weekday() in selected_weekdays:
-            date_str = f"{current_date.month}/{current_date.day}({weekdays_str[current_date.weekday()]})"
+            weekday_name = weekdays_str[current_date.weekday()]
+            
+            # 選択されたフォーマットに合わせて日付文字列を作成
+            if format_type == "M/D(曜日)":
+                date_str = f"{current_date.month}/{current_date.day}({weekday_name})"
+            elif format_type == "MM/DD(曜日)":
+                date_str = f"{current_date.strftime('%m/%d')}({weekday_name})"
+            elif format_type == "M月D日(曜日)":
+                date_str = f"{current_date.month}月{current_date.day}日({weekday_name})"
+            else:
+                date_str = f"{current_date.month}/{current_date.day}({weekday_name})"
             
             # 時間帯の指定がある場合は，日付と時間を掛け合わせて出力
             if time_slots:
@@ -43,7 +55,7 @@ def generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, tim
 st.set_page_config(page_title="伝助ジェネレータ", page_icon="📅", layout="centered")
 
 st.title("📅 伝助 日程ジェネレータ")
-st.write("伝助用の候補日リストを，指定した条件で自動生成します．")
+st.write("伝助などのスケジュール調整ツール用の候補日リストを，指定した条件で自動生成します．")
 
 st.divider()
 
@@ -91,15 +103,35 @@ excluded_dates = st.multiselect("除外する日付を選択:", options=date_opt
 # --- 4. 時間帯の追加（オプション） ---
 st.subheader("4. 時間帯を追加 (オプション)")
 st.write("1日の中で複数の時間を指定したい場合は，改行して入力してください．不要な場合は空欄のままでOKです．")
+
+# よく使う時間帯のプリセットボタン
+st.write("💡 よく使う時間帯をワンタッチで入力:")
+btn_col1, btn_col2, btn_col3 = st.columns(3)
+if btn_col1.button("昼 (12:00〜/14:00〜)"):
+    st.session_state.time_input = "12:00〜\n14:00〜"
+if btn_col2.button("夜 (18:00〜/20:00〜)"):
+    st.session_state.time_input = "18:00〜\n20:00〜"
+if btn_col3.button("クリア"):
+    st.session_state.time_input = ""
+
 time_input = st.text_area(
-    "入力例: 18:00〜 / 20:00〜", 
+    "時間帯を手入力:", 
+    value=st.session_state.get('time_input', ''),
     placeholder="18:00〜\n20:00〜",
-    height=100
+    height=100,
+    key='time_input'
+)
+
+# --- 5. フォーマットの選択 ---
+st.subheader("5. 出力フォーマット")
+format_type = st.selectbox(
+    "日付の表記方法を選んでください:",
+    ["M/D(曜日)", "MM/DD(曜日)", "M月D日(曜日)"]
 )
 
 st.divider()
 
-# --- 5. 生成ボタンと結果表示 ---
+# --- 6. 生成ボタンと結果表示 ---
 if st.button("✨ 日程リストを生成する", type="primary", use_container_width=True):
     if start_date > end_date:
         st.error("※開始日は終了日より前の日付を指定してください．")
@@ -110,11 +142,19 @@ if st.button("✨ 日程リストを生成する", type="primary", use_container
         time_slots = [t for t in time_input.split('\n') if t.strip()]
         
         # 関数を呼び出して結果を生成
-        result_dates = generate_advanced_densuke_dates(start_date, end_date, selected_weekdays, time_slots, excluded_dates)
+        result_dates = generate_advanced_densuke_dates(
+            start_date, end_date, selected_weekdays, time_slots, excluded_dates, format_type
+        )
         result_text = "\n".join(result_dates)
         
         if result_text:
-            st.success(f"生成完了！ ({len(result_dates)}件の候補日) 右上のボタンからコピーして伝助に貼り付けてください．")
+            st.success(f"生成完了！ ({len(result_dates)}件の候補日) 右上のコピーボタンからコピーして，下のリンクから伝助を開いて貼り付けてください．")
             st.code(result_text, language="text")
         else:
             st.warning("指定された期間内に，選択された曜日の日付がありません．")
+
+# --- 7. 伝助へのリンク ---
+st.divider()
+st.subheader("🔗 伝助を開く")
+st.write("コピーしたリストを使って，そのまま伝助のページでイベントを作成できます．")
+st.link_button("伝助 (スケジュール調整サービス) へ移動", "https://densuke.biz/", type="secondary")
